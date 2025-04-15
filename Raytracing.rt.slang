@@ -41,9 +41,16 @@ cbuffer PerFrameCB
     uint sampleIndex;
     bool useDOF;
     float3 backgroundColor;
-    float3 absorptionCoeff;
     uint maxRayBounce;
+    float3 absorptionCoeff;
+    float3 scatteringCoeff;
+    float phaseG;
+    float maxRaymarchingDistance;
     float marchSize;
+    float maxLighMarchingDistance;
+    float sunLightMarchSize;
+    float3 lightColor;
+    float3 lightDir;
     float time;
 };
 
@@ -115,7 +122,7 @@ float map(float3 p)
     float sphere = sdSphere(p - c, 1);
 
     c = float3(0, 10, 0);
-    float sphere2 = sdSphere(p - c, 0.75);
+    float sphere2 = sdSphere(p - c, .8);
     //float box = sdBox(p - c, float3(0.75, 0.75, 0.75));
 
     return opSmoothUnion(sphere, sphere2, 2);
@@ -147,6 +154,11 @@ float mapDebug(float3 p)
 float3 BeerLambert(float3 absorptionCoefficient, float distanceTraveled)
 {
     return exp(-absorptionCoefficient * distanceTraveled);
+}
+
+float PhaseHG(float cosTheta, float g) {
+    float denom = 1.0 + g * g - 2.0 * g * cosTheta;
+    return (1.0 - g * g) / (4.0 * 3.1415926538 * pow(denom, 1.5));
 }
 
 // Miss shader
@@ -352,39 +364,45 @@ void RaymarchingClosestHit(inout PrimaryRayData hitData, SDF_GeometryAttributes 
     float3 rayDir = WorldRayDirection();
     float currentRayT = RayTCurrent();
 
-    float3 lightColor = float3(1, 1, 1);
-    float3 volumeAlbedo = float3(0.1, 0.3, 1);
+    float3 transmittance = float3(1.f, 1.f, 1.f);
+    float3 extinctionCoeff = absorptionCoeff + scatteringCoeff;
 
-    float3 opaqueVisiblity = 1.0f;
-    float volumeDepth = 0.f;
+    float3 totalLight = (0.f, 0.f, 0.f);
 
-    float3 volumetricColor = float3(1, 1, 1);
-    //float3 volumetricColor = float3(0, 0, 0);
-
-    for (int i = 0; i < 80; i++) 
+    for (float t = 0.f; t < maxRaymarchingDistance; t+=marchSize)
     {
-        volumeDepth += marchSize;
-
-        if (volumeDepth > 100.f) break;
-
-        float3 position = attribs.w_position + volumeDepth * rayDir;
+        float3 position = attribs.w_position + rayDir * t;
         bool isInVolume = map(position) < 0.001f;
 
         if (isInVolume)
         {
-            // Apply Beer's Law attenuation
-            float3 absorb = exp(-absorptionCoeff * marchSize);
-            volumetricColor *= absorb;
+            float3 transmittedSunLight = lightColor;
 
-            // float3 previousOpaqueVisiblity = opaqueVisiblity;
-            // opaqueVisiblity *= BeerLambert(absorptionCoeff, marchSize);
-            // float3 absorptionFromMarch = previousOpaqueVisiblity - opaqueVisiblity;
+            for (float sun_t = 0.f; sun_t < maxLighMarchingDistance; sun_t+= sunLightMarchSize)
+            {
+                float3 posAlongSunRay = position + (-lightDir) * sun_t;
+                isInVolume = map(posAlongSunRay) < 0.001f;
 
-            // volumetricColor += absorptionFromMarch * volumeAlbedo * lightColor;
+                if (isInVolume)
+                {
+                    transmittedSunLight *= exp(-absorptionCoeff * sunLightMarchSize);
+                }
+            }
+
+            float cosTheta = dot(lightDir, -rayDir);
+            float phase = PhaseHG(cosTheta, phaseG);
+            float3 scattered = transmittedSunLight * phase * scatteringCoeff;
+
+            totalLight += scattered * transmittance * marchSize;
+
+            transmittance *= exp(-absorptionCoeff * marchSize);
+
+            if (max(transmittance.r, max(transmittance.g, transmittance.b)) < 0.01f)
+                break;
         }
     }
 
-    hitData.color = float4(volumetricColor, 1);
+    hitData.color = float4(totalLight * gScene.envMap.eval(rayDir) , 1);
     hitData.hitT = currentRayT;
 }
 

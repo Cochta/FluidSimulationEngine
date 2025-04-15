@@ -41,13 +41,26 @@ uint32_t mSampleGuiPositionX = 20;
 uint32_t mSampleGuiPositionY = 40;
 
 static float3 kClearColor(.2, 1, .1);
-static float3 absorptionCoeff(0.4, 0.1, 0.05);
-//static const std::string kDefaultScene = "test_scenes/tutorial.pyscene";
+
+static uint kMaxRayBounce = 10;
+
+static float3 absorptionCoeff(1.0, 0.4, 0.05);
+static float3 scatteringCoeff(0.1, 0.2, 0.8);
+static float phaseG = 0.8f;
+
+static float maxRayMarchingDistance = 10.f;
+static float kMarchSize = 0.01f;
+
+static float maxLighMarchingDistance = 10.f;
+static float sunLightMarchSize = 0.2f;
+
+float3 lightColor = float3(1, 1, 1);
+float3 lightDir = normalize(float3(1, -1, -1));
+
 static const std::string kDefaultScene = "Arcade/Arcade.pyscene";
 static const std::string kEnvMapPath = "hallstatt4_hd.hdr";
 
-static uint kMaxRayBounce = 10;
-static float kMarchSize = 0.1f;
+// static const std::string kDefaultScene = "test_scenes/tutorial.pyscene";
 
 Raytracing::Raytracing(const SampleAppConfig& config) : SampleApp(config)
 {
@@ -336,10 +349,24 @@ void Raytracing::onFrameRender(RenderContext* pRenderContext, const ref<Fbo>& pT
     var["PerFrameCB"]["tanHalfFovY"] = std::tan(fovY * 0.5f);
     var["PerFrameCB"]["sampleIndex"] = mSampleIndex++;
     var["PerFrameCB"]["useDOF"] = mUseDOF;
+
     var["PerFrameCB"]["backgroundColor"] = kClearColor;
-    var["PerFrameCB"]["absorptionCoeff"] = absorptionCoeff;
+
     var["PerFrameCB"]["maxRayBounce"] = kMaxRayBounce;
+
+    var["PerFrameCB"]["absorptionCoeff"] = absorptionCoeff;
+    var["PerFrameCB"]["scatteringCoeff"] = scatteringCoeff;
+    var["PerFrameCB"]["phaseG"] = phaseG;
+    
+    var["PerFrameCB"]["maxRaymarchingDistance"] = maxRayMarchingDistance;
     var["PerFrameCB"]["marchSize"] = kMarchSize;
+
+    var["PerFrameCB"]["maxLighMarchingDistance"] = maxLighMarchingDistance;
+    var["PerFrameCB"]["sunLightMarchSize"] = sunLightMarchSize;
+
+    var["PerFrameCB"]["lightColor"] = lightColor;
+    var["PerFrameCB"]["lightDir"] = lightDir;
+
     var["PerFrameCB"]["time"] = static_cast<float>(getGlobalClock().getTime());
     var["gOutput"] = mpRtOut;
     
@@ -374,9 +401,23 @@ void Raytracing::onGuiRender(Gui* pGui)
     static auto is_checked = false;
     w.checkbox("HelloCheckBox", is_checked);
     w.rgbColor("Background color", kClearColor);
-    w.var("absorptionCoeff", absorptionCoeff);
+
     w.var("MaxRayBounce", kMaxRayBounce);
+
+    w.var("absorptionCoeff", absorptionCoeff);
+    w.var("scatteringCoeff", scatteringCoeff);
+    w.var("Phase G ", phaseG);
+    
+    w.var("maxRaymarchingDistance", maxRayMarchingDistance);
     w.var("MarchSize", kMarchSize);
+    w.var("maxLighMarchingDistance", maxLighMarchingDistance);
+    w.var("sunLightMarchSize", sunLightMarchSize);
+
+    w.rgbColor("Light color", lightColor);
+    static float3 ImGUI_LightDir = lightDir;
+    w.var("Light Direction", ImGUI_LightDir);
+    lightDir = math::normalize(ImGUI_LightDir);
+
     w.checkbox("Use Depth of Field", mUseDOF);
     if (w.button("Click Here"))
     {
