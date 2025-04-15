@@ -57,6 +57,8 @@ static float sunLightMarchSize = 0.2f;
 float3 lightColor = float3(1, 1, 1);
 float3 lightDir = normalize(float3(1, -1, -1));
 
+static float IoR = 1.33f;
+
 static const std::string kDefaultScene = "Arcade/Arcade.pyscene";
 static const std::string kEnvMapPath = "hallstatt4_hd.hdr";
 
@@ -367,6 +369,8 @@ void Raytracing::onFrameRender(RenderContext* pRenderContext, const ref<Fbo>& pT
     var["PerFrameCB"]["lightColor"] = lightColor;
     var["PerFrameCB"]["lightDir"] = lightDir;
 
+    var["PerFrameCB"]["IoR"] = IoR;
+
     var["PerFrameCB"]["time"] = static_cast<float>(getGlobalClock().getTime());
     var["gOutput"] = mpRtOut;
     
@@ -417,6 +421,8 @@ void Raytracing::onGuiRender(Gui* pGui)
     static float3 ImGUI_LightDir = lightDir;
     w.var("Light Direction", ImGUI_LightDir);
     lightDir = math::normalize(ImGUI_LightDir);
+
+    w.var("IoR", IoR);
 
     w.checkbox("Use Depth of Field", mUseDOF);
     if (w.button("Click Here"))

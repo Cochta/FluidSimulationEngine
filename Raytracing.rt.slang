@@ -51,6 +51,7 @@ cbuffer PerFrameCB
     float sunLightMarchSize;
     float3 lightColor;
     float3 lightDir;
+    float IoR;
     float time;
 };
 
@@ -161,53 +162,100 @@ float PhaseHG(float cosTheta, float g) {
     return (1.0 - g * g) / (4.0 * 3.1415926538 * pow(denom, 1.5));
 }
 
+float3 CalculateTransmittedSunLightAtPos(float3 position)
+{
+    float3 transmittedSunLight = lightColor;
+    for (float sun_t = 0.f; sun_t < maxLighMarchingDistance; sun_t += sunLightMarchSize)
+    {
+        float3 posAlongSunRay = position + (-lightDir) * sun_t;
+        bool isInVolume = map(posAlongSunRay) < 0.001f;
+
+        if (isInVolume)
+        {
+            transmittedSunLight *= exp(-absorptionCoeff * sunLightMarchSize);
+        }
+    }
+
+    return transmittedSunLight;
+}
+
+float3 CalculateTransmittanceRaymarching(SDF_GeometryAttributes attribs, float3 rayDir)
+{
+    float3 totalLight = float3(0.f, 0.f, 0.f);
+    float3 transmittance = float3(1.f, 1.f, 1.f);
+
+    for (float t = 0.f; t < maxRaymarchingDistance; t += marchSize)
+    {
+        float3 position = attribs.w_position + rayDir * t;
+        bool isInVolume = map(position) < 0.001f;
+
+        if (isInVolume)
+        {
+            float3 transmittedSunLight = CalculateTransmittedSunLightAtPos(position);
+
+            float cosTheta = dot(lightDir, -rayDir);
+            float phase = PhaseHG(cosTheta, phaseG);
+            float3 scattered = transmittedSunLight * phase * scatteringCoeff;
+
+            totalLight += scattered * transmittance * marchSize;
+
+            transmittance *= exp(-absorptionCoeff * marchSize);
+
+            if (max(transmittance.r, max(transmittance.g, transmittance.b)) < 0.01f)
+                break;
+        }
+    }
+
+    return totalLight;
+}
+
 // Miss shader
 [shader("miss")]
 void miss(inout PrimaryRayData hitData)
 {
-    float3 rayDir = WorldRayDirection();
-    float3 rayOrigin = WorldRayOrigin();
+    // float3 rayDir = WorldRayDirection();
+    // float3 rayOrigin = WorldRayOrigin();
 
-    float3 finalColor = float3(0, 0, 0);
+    // float3 finalColor = float3(0, 0, 0);
 
-    float t = 0.f; // total distance travelled
+    // float t = 0.f; // total distance travelled
 
-    // Raymarching.
-    for (int i = 0; i < 80; i++)
-    {
-        float3 p = rayOrigin + rayDir * t; // Position along the ray.
+    // // Raymarching.
+    // for (int i = 0; i < 80; i++)
+    // {
+    //     float3 p = rayOrigin + rayDir * t; // Position along the ray.
 
-        float d = mapDebug(p); // Current distance to the scene.
+    //     float d = mapDebug(p); // Current distance to the scene.
 
-        t += d; // March the ray.
+    //     t += d; // March the ray.
 
-        // Early stop if close enough or if too far.
-        if (d < 0.001f)
-        {
-            break;
-        }
+    //     // Early stop if close enough or if too far.
+    //     if (d < 0.001f)
+    //     {
+    //         break;
+    //     }
 
-        if (t > 100.f) 
-        {
-            break;
-        }
-    }
+    //     if (t > 100.f) 
+    //     {
+    //         break;
+    //     }
+    // }
 
-    if (t < 100.f)
-    {
-        t *= 0.2;
-        finalColor = float3(t, t, t);
-        finalColor *= float3(0.1, 0.3, 1);
-    }
-    else
-    {
-        finalColor = gScene.envMap.eval(rayDir);
-    }
+    // if (t < 100.f)
+    // {
+    //     t *= 0.2;
+    //     finalColor = float3(t, t, t);
+    //     finalColor *= float3(0.1, 0.3, 1);
+    // }
+    // else
+    // {
+    //     finalColor = gScene.envMap.eval(rayDir);
+    // }
 
 
-    hitData.color = float4(finalColor, 1);
+    // hitData.color = float4(finalColor, 1);
 
-    return;
+    // return;
 
     // Use the ray direction to sample the environment map
     float3 envColor = gScene.envMap.eval(WorldRayDirection());
@@ -357,52 +405,98 @@ void RaymarchingClosestHit(inout PrimaryRayData hitData, SDF_GeometryAttributes 
 {
     if (hitData.depth >= maxRayBounce)
     {
-        hitData.color = float4(0, 0, 0, 0);
+        hitData.color = float4(backgroundColor, 0);
+        hitData.hitT = 0.f;
         return;
     }
 
     float3 rayDir = WorldRayDirection();
     float currentRayT = RayTCurrent();
 
-    float3 transmittance = float3(1.f, 1.f, 1.f);
-    float3 extinctionCoeff = absorptionCoeff + scatteringCoeff;
+    // 1. Compute Fresnel reflectance
+    float etaI = 1.f;                                // Incident IoR (Air by default).
+    float etaT = IoR;                                // Tranmission IoR (the one from the medium).
+    bool isEntering = dot(rayDir, attribs.w_normal) > 0.0;
+    float eta = isEntering ? etaI / etaT : etaT / etaI;
+    float3 flippedShadingNormal = isEntering ? attribs.w_normal : -attribs.w_normal;
 
-    float3 totalLight = (0.f, 0.f, 0.f);
+    float F0 = pow((etaI - etaT) / (etaI + etaT), 2.0);
+    float F90 = 1.f;
+    float cosTheta = max(0.00001f, dot(flippedShadingNormal, rayDir));
+    float reflectionRatio = evalFresnelSchlick(F0, F90, cosTheta);
+    float refractionRatio = 1.f - reflectionRatio;
 
-    for (float t = 0.f; t < maxRaymarchingDistance; t+=marchSize)
+    // 2. Prepare color storage
+    float3 reflectedColor = float3(0, 0, 0);
+    float3 refractedColor = float3(0, 0, 0);
+
+    // 3. Check for total internal reflection
+    bool tir = false;
+    float3 refractDir = rayDir; // Default if eta == 1.0
+
+    if (eta != 1.0)
     {
-        float3 position = attribs.w_position + rayDir * t;
-        bool isInVolume = map(position) < 0.001f;
-
-        if (isInVolume)
-        {
-            float3 transmittedSunLight = lightColor;
-
-            for (float sun_t = 0.f; sun_t < maxLighMarchingDistance; sun_t+= sunLightMarchSize)
-            {
-                float3 posAlongSunRay = position + (-lightDir) * sun_t;
-                isInVolume = map(posAlongSunRay) < 0.001f;
-
-                if (isInVolume)
-                {
-                    transmittedSunLight *= exp(-absorptionCoeff * sunLightMarchSize);
-                }
-            }
-
-            float cosTheta = dot(lightDir, -rayDir);
-            float phase = PhaseHG(cosTheta, phaseG);
-            float3 scattered = transmittedSunLight * phase * scatteringCoeff;
-
-            totalLight += scattered * transmittance * marchSize;
-
-            transmittance *= exp(-absorptionCoeff * marchSize);
-
-            if (max(transmittance.r, max(transmittance.g, transmittance.b)) < 0.01f)
-                break;
-        }
+        if (!refractWithTIR(rayDir, flippedShadingNormal, eta, refractDir))
+            tir = true;
     }
 
-    hitData.color = float4(totalLight * gScene.envMap.eval(rayDir) , 1);
+    // 4. Trace reflection ray if needed
+    if (reflectionRatio > 0.001f || tir)
+    {
+        // Handle total internal reflection
+        float3 reflectDir = reflect(rayDir, attribs.w_normal); // Compute the reflection direction
+
+        // Define reflection ray
+        RayDesc reflectRay;
+        reflectRay.Origin = attribs.w_position + reflectDir * 0.1f; // Offset to avoid self-intersection
+        reflectRay.Direction = reflectDir;
+        reflectRay.TMin = 0.001f;
+        reflectRay.TMax = 100000.f;
+
+        // Trace reflection ray
+        PrimaryRayData reflectedRayData = {};
+        reflectedRayData.depth = hitData.depth + 1;
+        reflectedRayData.hitT = 0;
+        TraceRay(gScene.rtAccel, RAY_FLAG_NONE, 0xFF, 0, rayTypeCount, 0, reflectRay, reflectedRayData);
+
+        reflectedColor = reflectedRayData.color.rgb;
+    }
+
+    // 5. Trace refraction ray if not TIR
+    if (!tir && refractionRatio > 0.001f)
+    {
+        refractedColor = CalculateTransmittanceRaymarching(attribs, refractDir);
+
+        // // Trace a refracted ray to get the color after the transmission.
+        // RayDesc refractRay;
+        // refractRay.Origin = attribs.w_position + refractDir * 0.001f;
+        // refractRay.Direction = refractDir;
+        // refractRay.TMin = 0.001f;
+        // refractRay.TMax = 100000.f;
+
+        // PrimaryRayData refractedRayData = {};
+        // refractedRayData.depth = hitData.depth + 1;
+        // refractedRayData.hitT = 0.f;
+        // refractedRayData.absorptionDistance = hitData.absorptionDistance;
+        // TraceRay(gScene.rtAccel, RAY_FLAG_NONE, 0xFF, 0, rayTypeCount, 0, refractRay, refractedRayData);
+
+        // refractedColor = refractedRayData.color.rgb;
+    }
+
+    //float3 extinctionCoeff = absorptionCoeff + scatteringCoeff;
+
+    // 6. Mix results
+    float3 totalLight = tir ? reflectedColor :
+            reflectionRatio * reflectedColor + refractionRatio * refractedColor;
+
+    //float3 totalLight = CalculateTransmittanceRaymarching(attribs, rayDir);
+
+    reflectedColor *= reflectionRatio;
+    refractedColor = float3(0, 0, 1) * refractionRatio;
+
+    float3 finalColor = reflectedColor + refractedColor;
+
+    hitData.color = float4(totalLight, 1);
     hitData.hitT = currentRayT;
 }
 
