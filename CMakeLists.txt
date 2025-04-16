@@ -6,6 +6,7 @@ target_sources(Raytracing PRIVATE
     Raytracing.3d.slang
     Raytracing.rt.slang
     triangle.slang
+    SDF_Functions.slang
 )
 
 target_copy_shaders(Raytracing Samples/Raytracing)

@@ -31,6 +31,7 @@
 #include "Scene/SceneBuilder.h"
 #include "Utils/Math/FalcorMath.h"
 #include "Utils/UI/TextRenderer.h"
+#include "Core/Program/Program.h"
 
 FALCOR_EXPORT_D3D12_AGILITY_SDK
 
@@ -274,6 +275,9 @@ void Raytracing::onLoad(RenderContext* pRenderContext)
    // Create a triangle using a Scene object
     // Create a raytracing program description
     ProgramDesc rtProgDesc;
+    ProgramDesc::ShaderModule s_module = ProgramDesc::ShaderModule("Samples/Raytracing/SDF_Functions.slang");
+    s_module.addFile("Samples/Raytracing/SDF_Functions.slang");
+    shaderModules.emplace_back(s_module);
     rtProgDesc.addShaderModules(shaderModules);
     rtProgDesc.addShaderLibrary("Samples/Raytracing/Raytracing.rt.slang");
     rtProgDesc.addTypeConformances(typeConformances);

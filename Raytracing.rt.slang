@@ -25,6 +25,9 @@
  # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************/
+//#pragma add - search - path "Samples/Raytracing" // or wherever your SDF module is
+import SDF_Functions;
+
 import Scene.Raytracing;
 import Utils.Sampling.TinyUniformSampleGenerator;
 import Rendering.Materials.Fresnel;
@@ -54,6 +57,8 @@ cbuffer PerFrameCB
     float IoR;
     float time;
 };
+
+
 
 struct SDF_GeometryAttributes
 {
@@ -90,67 +95,6 @@ float computeEta(const ShadingData sd)
     return eta;
 }
 
-float sdSphere(float3 p, float3 sphereCenter, float sphereRadius)
-{
-    return length(p - sphereCenter) - sphereRadius;
-}
-
-float sdSphere(float3 p, float sphereRadius)
-{
-    return length(p) - sphereRadius;
-}
-
-float sdBox(float3 p, float3 b)
-{
-    float3 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-}
-
-// Define mix function in Slang (similar to GLSL mix or HLSL lerp)
-float mix(float x, float y, float a) {
-    return x * (1.0 - a) + y * a;
-}
-
-float opSmoothUnion(float d1, float d2, float k)
-{
-    float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    return mix(d2, d1, h) - k * h * (1.0 - h);
-}
-
-float map(float3 p)
-{
-    float3 c = float3(sin(time * 3) * 3, 10, 0);
-    float sphere = sdSphere(p - c, 1);
-
-    c = float3(0, 10, 0);
-    float sphere2 = sdSphere(p - c, .8);
-    //float box = sdBox(p - c, float3(0.75, 0.75, 0.75));
-
-    return opSmoothUnion(sphere, sphere2, 2);
-}
-
-// Taken from the Microsoft DirectX-Graphics-Samples git repo: 
-// https://github1s.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12Raytracing/src/D3D12RaytracingProceduralGeometry/SignedDistancePrimitives.hlsli#L275-L283
-float3 sdCalculateNormal(in float3 pos)
-{
-    float2 e = float2(1.0, -1.0) * 0.5773 * 0.0001;
-    return normalize(
-        e.xyy * map(pos + e.xyy) +
-        e.yyx * map(pos + e.yyx) +
-        e.yxy * map(pos + e.yxy) +
-        e.xxx * map(pos + e.xxx) );
-}
-
-float mapDebug(float3 p)
-{
-    float3 c = float3(sin(time * 3) * 3, 15, 0);
-    float sphere = sdSphere(p - c, 1);
-
-    c = float3(0, 15, 0);
-    float box = sdBox(p - c, float3(0.75, 0.75, 0.75));
-
-    return opSmoothUnion(sphere, box, 2); // Distance to a sphere of radius 1.
-}
 
 float3 BeerLambert(float3 absorptionCoefficient, float distanceTraveled)
 {
@@ -168,7 +112,7 @@ float3 CalculateTransmittedSunLightAtPos(float3 position)
     for (float sun_t = 0.f; sun_t < maxLighMarchingDistance; sun_t += sunLightMarchSize)
     {
         float3 posAlongSunRay = position + (-lightDir) * sun_t;
-        bool isInVolume = map(posAlongSunRay) < 0.001f;
+        bool isInVolume = map(posAlongSunRay, time) < 0.001f;
 
         if (isInVolume)
         {
@@ -187,7 +131,7 @@ float3 CalculateTransmittanceRaymarching(SDF_GeometryAttributes attribs, float3 
     for (float t = 0.f; t < maxRaymarchingDistance; t += marchSize)
     {
         float3 position = attribs.w_position + rayDir * t;
-        bool isInVolume = map(position) < 0.001f;
+        bool isInVolume = map(position, time) < 0.001f;
 
         if (isInVolume)
         {
@@ -517,13 +461,13 @@ void RaymarchingIntersection()
     {
         float3 p = rayOrigin + rayDir * t; // Position along the ray.
 
-        float d = map(p); // Current distance to the scene.
+        float d = map(p, time); // Current distance to the scene.
 
         // Early stop if close enough or if too far.
         if (d < 0.001f)
         {
             attr.w_position = p;
-            attr.w_normal = sdCalculateNormal(p);
+            attr.w_normal = sdCalculateNormal(p, time);
             attr.t = max(t, 0.001f);
 
             ReportHit(t, /*hitKind*/ 0, attr);
