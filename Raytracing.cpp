@@ -43,16 +43,18 @@ uint32_t mSampleGuiPositionY = 40;
 
 static float3 kClearColor(.2, 1, .1);
 
-static uint kMaxRayBounce = 10;
+static float waterTurbulence = 2.5f;
+
+static uint kMaxRayBounce = 3;
 
 static float3 absorptionCoeff(1.0, 0.4, 0.05);
 static float3 scatteringCoeff(0.1, 0.2, 0.8);
 static float phaseG = 0.8f;
 
-static float maxRayMarchingDistance = 10.f;
-static float kMarchSize = 0.01f;
+static float maxRayMarchingDistance = 5.f;
+static float kMarchSize = 0.1f;
 
-static float maxLighMarchingDistance = 10.f;
+static float maxLighMarchingDistance = 3.f;
 static float sunLightMarchSize = 0.2f;
 
 float3 lightColor = float3(1, 1, 1);
@@ -175,8 +177,8 @@ void Raytracing::onLoad(RenderContext* pRenderContext)
     auto triangle_mesh_id_3 = scene_builder_.addTriangleMesh(cube, dielectric_blue);
     auto triangle_mesh_id_4 = scene_builder_.addTriangleMesh(cube, lambertian);
 
-    AABB raymarching_AABB = AABB(float3(-5, -5, -5) + float3(0, 10, 0),
-        float3(5, 5, 5) + float3(0, 10, 0));
+    AABB raymarching_AABB = AABB(float3(-50, -5, -5) + float3(0, 10, 0),
+        float3(50, 5, 5) + float3(0, 10, 0));
     uint32_t raymarching_AABB_ID = 1;
     scene_builder_.addCustomPrimitive(raymarching_AABB_ID, raymarching_AABB);
 
@@ -358,6 +360,8 @@ void Raytracing::onFrameRender(RenderContext* pRenderContext, const ref<Fbo>& pT
 
     var["PerFrameCB"]["backgroundColor"] = kClearColor;
 
+    var["PerFrameCB"]["waterTurbulence"] = waterTurbulence;
+
     var["PerFrameCB"]["maxRayBounce"] = kMaxRayBounce;
 
     var["PerFrameCB"]["absorptionCoeff"] = absorptionCoeff;
@@ -376,6 +380,9 @@ void Raytracing::onFrameRender(RenderContext* pRenderContext, const ref<Fbo>& pT
     var["PerFrameCB"]["IoR"] = IoR;
 
     var["PerFrameCB"]["time"] = static_cast<float>(getGlobalClock().getTime());
+    static int frame = 0;
+    var["PerFrameCB"]["iFrame"] = frame++;
+
     var["gOutput"] = mpRtOut;
     
 
@@ -403,12 +410,12 @@ void Raytracing::onGuiRender(Gui* pGui)
 
     //mpScene->renderUI(w);
 
-    Gui::Window w(pGui, "Raytracing Test", {250, 200});
+    Gui::Window w(pGui, "Raytracing Fluid Rendering", {250, 200});
     renderGlobalUI(pGui);
-    w.text("Hello from raytracing app");
-    static auto is_checked = false;
-    w.checkbox("HelloCheckBox", is_checked);
+
     w.rgbColor("Background color", kClearColor);
+
+    w.var("Water Turbulance", waterTurbulence);
 
     w.var("MaxRayBounce", kMaxRayBounce);
 
@@ -429,10 +436,10 @@ void Raytracing::onGuiRender(Gui* pGui)
     w.var("IoR", IoR);
 
     w.checkbox("Use Depth of Field", mUseDOF);
-    if (w.button("Click Here"))
-    {
-        msgBox("Info", "Now why would you do that?");
-    }
+    //if (w.button("Click Here"))
+    //{
+    //    msgBox("Info", "Now why would you do that?");
+    //}
 
     mpScene->renderUI(w);
 }

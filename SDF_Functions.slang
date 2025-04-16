@@ -74,6 +74,59 @@ float fbm_4( in float3 x, int iFrame)
     return fbm(x, 4, iFrame);
 }
 
+float GetWaterWavesDisplacement(float3 position, float time)
+{
+    // const float scale = 1.0 / 5.0;
+
+    // float height = 7.0 * sin(position.x / 15.0 + time * 1.3) +
+    //                6.0 * cos(position.z / 15.0 + time / 1.1);
+
+    // return height * (5.0 / 13.0); // scales from max ±13 to ±5
+
+    return 7.0 * sin(position.x / 15.0 + time * 1.3) +
+         6.0 * cos(position.z / 15.0 + time / 1.1);
+}
+
+float GetWaterNoise(float3 position, float waterTurbulence, float time, int iFrame)
+{
+    return waterTurbulence * fbm_4(position / 15.0 + time / 3.0, iFrame);
+}
+
+float QueryOceanDistanceField(float3 pos, float waterTurbulence, float time, int iFrame)
+{
+    return GetWaterWavesDisplacement(pos, time)
+         + GetWaterNoise(pos, waterTurbulence, time, iFrame);
+}
+
+// Taken from https://iquilezles.org/articles/distfunctions
+float sdPlane(float3 p)
+{
+    return p.y;
+}
+
+// Taken from https://iquilezles.org/articles/distfunctions
+float sdSmoothSubtraction(float d1, float d2, float k) {
+    float h = clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);
+    return mix(d2, -d1, h) + k * h * (1.0 - h);
+}
+
+float QueryVolumetricDistanceField(in float3 pos, float waterTurbulence, float time, int iFrame)
+{
+    float waveY = QueryOceanDistanceField(pos, waterTurbulence, time, iFrame); // gives you the surface height at this XZ point
+    return pos.y - waveY;                               // signed distance from current point to the surface
+
+    // float minDist = QueryOceanDistanceField(pos, waterTurbulence, time, iFrame);
+
+    // minDist = sdSmoothSubtraction(sdSphere(pos, float3(0.0, 0.0, -3), 35.0) + 5.0 * 
+    //     fbm_4(pos / float3(12, 20, 12) - time / 5.0, iFrame), minDist, 12.0);
+
+    // float groundLevel = 5;
+
+    // minDist = opSmoothUnion(minDist, sdPlane(pos - float3(0, groundLevel - 1.0, 0)), 13.0);
+
+    // return minDist;
+}
+
 // --------------------------------------------//
 //               SDF Functions
 // --------------------------------------------//
@@ -105,28 +158,38 @@ public float opSmoothUnion(float d1, float d2, float k)
     return mix(d2, d1, h) - k * h * (1.0 - h);
 }
 
-public float map(float3 p, float time)
+public float map(float3 p, float waterTurbulence, float time, int iFrame)
 {
-    float3 c = float3(sin(time * 3) * 3, 10, 0);
+    float water = QueryVolumetricDistanceField(p, waterTurbulence, time, iFrame);
+    //float water = GetWaterNoise(p, waterTurbulence, time, iFrame);
+
+    // float3 c = float3(0, 10, 0);
+    // float bound = sdBox(p - c, float3(10, 10, 10));
+
+    // return max(water, bound); // Only visible where both inside
+
+    float3 c = float3(water, 10, water);
     float sphere = sdSphere(p - c, 1);
 
-    c = float3(0, 10, 0);
-    float sphere2 = sdSphere(p - c, .8);
-    // float box = sdBox(p - c, float3(0.75, 0.75, 0.75));
+    return water;
 
-    return opSmoothUnion(sphere, sphere2, 2);
+    // c = float3(0, 10, 0);
+    // float sphere2 = sdSphere(p - c, .8);
+    // // float box = sdBox(p - c, float3(0.75, 0.75, 0.75));
+
+    // return opSmoothUnion(sphere, sphere2, 2);
 }
 
 // Taken from the Microsoft DirectX-Graphics-Samples git repo:
 // https://github1s.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12Raytracing/src/D3D12RaytracingProceduralGeometry/SignedDistancePrimitives.hlsli#L275-L283
-public float3 sdCalculateNormal(in float3 pos, float time)
+public float3 sdCalculateNormal(in float3 pos, float waterTurbulence, float time, int iFrame)
 {
     float2 e = float2(1.0, -1.0) * 0.5773 * 0.0001;
     return normalize(
-        e.xyy * map(pos + e.xyy, time) +
-        e.yyx * map(pos + e.yyx, time) +
-        e.yxy * map(pos + e.yxy, time) +
-        e.xxx * map(pos + e.xxx, time) );
+        e.xyy * map(pos + e.xyy, waterTurbulence, time, iFrame) +
+        e.yyx * map(pos + e.yyx, waterTurbulence, time, iFrame) +
+        e.yxy * map(pos + e.yxy, waterTurbulence, time, iFrame) +
+        e.xxx * map(pos + e.xxx, waterTurbulence, time, iFrame) );
 }
 
 public float mapDebug(float3 p, float time)

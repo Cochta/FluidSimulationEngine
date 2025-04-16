@@ -44,6 +44,7 @@ cbuffer PerFrameCB
     uint sampleIndex;
     bool useDOF;
     float3 backgroundColor;
+    float waterTurbulence;
     uint maxRayBounce;
     float3 absorptionCoeff;
     float3 scatteringCoeff;
@@ -56,6 +57,7 @@ cbuffer PerFrameCB
     float3 lightDir;
     float IoR;
     float time;
+    int iFrame;
 };
 
 
@@ -112,7 +114,7 @@ float3 CalculateTransmittedSunLightAtPos(float3 position)
     for (float sun_t = 0.f; sun_t < maxLighMarchingDistance; sun_t += sunLightMarchSize)
     {
         float3 posAlongSunRay = position + (-lightDir) * sun_t;
-        bool isInVolume = map(posAlongSunRay, time) < 0.001f;
+        bool isInVolume = map(posAlongSunRay, waterTurbulence, time, iFrame) < 0.001f;
 
         if (isInVolume)
         {
@@ -131,7 +133,7 @@ float3 CalculateTransmittanceRaymarching(SDF_GeometryAttributes attribs, float3 
     for (float t = 0.f; t < maxRaymarchingDistance; t += marchSize)
     {
         float3 position = attribs.w_position + rayDir * t;
-        bool isInVolume = map(position, time) < 0.001f;
+        bool isInVolume = map(position, waterTurbulence, time, iFrame) < 0.001f;
 
         if (isInVolume)
         {
@@ -160,49 +162,45 @@ void miss(inout PrimaryRayData hitData)
     // float3 rayDir = WorldRayDirection();
     // float3 rayOrigin = WorldRayOrigin();
 
-    // float3 finalColor = float3(0, 0, 0);
+    // SDF_GeometryAttributes attr;
 
-    // float t = 0.f; // total distance travelled
+    // float3 finalColor = float3(0, 0, 0);
+    // bool hasHit = false;
+
+    // float t = RayTMin(); // total distance travelled
 
     // // Raymarching.
-    // for (int i = 0; i < 80; i++)
+    // for (int i = 0; i < 80 && t < RayTCurrent(); i++)
     // {
     //     float3 p = rayOrigin + rayDir * t; // Position along the ray.
 
-    //     float d = mapDebug(p); // Current distance to the scene.
-
-    //     t += d; // March the ray.
+    //     float d = map(p, waterTurbulence, time, iFrame); // Current distance to the scene.
 
     //     // Early stop if close enough or if too far.
     //     if (d < 0.001f)
     //     {
-    //         break;
+    //         hasHit = true;
+    //         finalColor = float3(0.1f, 0.3f, 0.8f);
+    //         // attr.w_position = p;
+    //         // attr.w_normal = sdCalculateNormal(p, waterTurbulence, time, iFrame);
+    //         // attr.t = max(t, 0.001f);
+
+    //         // ReportHit(t, /*hitKind*/ 0, attr);
+    //         // break;
     //     }
 
-    //     if (t > 100.f) 
+    //     t += max(d, 0.01f); // March the ray.
+
+    //     if (t > 100.f)
     //     {
     //         break;
     //     }
     // }
 
-    // if (t < 100.f)
-    // {
-    //     t *= 0.2;
-    //     finalColor = float3(t, t, t);
-    //     finalColor *= float3(0.1, 0.3, 1);
-    // }
-    // else
-    // {
-    //     finalColor = gScene.envMap.eval(rayDir);
-    // }
-
-
-    // hitData.color = float4(finalColor, 1);
-
-    // return;
 
     // Use the ray direction to sample the environment map
     float3 envColor = gScene.envMap.eval(WorldRayDirection());
+    //hitData.color = hasHit ? float4(0.1, 0.3, 0.8, 1.0) : float4(envColor, 1.f);
     hitData.color = float4(envColor, 1.f);
     hitData.hitT = -1.f;
     hitData.absorptionDistance = 0;
@@ -347,6 +345,10 @@ void closestHit(inout PrimaryRayData hitData, BuiltInTriangleIntersectionAttribu
 [shader("closesthit")]
 void RaymarchingClosestHit(inout PrimaryRayData hitData, SDF_GeometryAttributes attribs)
 {
+    hitData.color = float4(float3(0.1f, 0.3f, 0.8f), 0);
+    hitData.hitT = RayTCurrent();
+    return;
+
     if (hitData.depth >= maxRayBounce)
     {
         hitData.color = float4(backgroundColor, 0);
@@ -388,22 +390,22 @@ void RaymarchingClosestHit(inout PrimaryRayData hitData, SDF_GeometryAttributes 
     if (reflectionRatio > 0.001f || tir)
     {
         // Handle total internal reflection
-        float3 reflectDir = reflect(rayDir, attribs.w_normal); // Compute the reflection direction
+        // float3 reflectDir = reflect(rayDir, attribs.w_normal); // Compute the reflection direction
 
-        // Define reflection ray
-        RayDesc reflectRay;
-        reflectRay.Origin = attribs.w_position + reflectDir * 0.1f; // Offset to avoid self-intersection
-        reflectRay.Direction = reflectDir;
-        reflectRay.TMin = 0.001f;
-        reflectRay.TMax = 100000.f;
+        // // Define reflection ray
+        // RayDesc reflectRay;
+        // reflectRay.Origin = attribs.w_position + reflectDir * 0.1f; // Offset to avoid self-intersection
+        // reflectRay.Direction = reflectDir;
+        // reflectRay.TMin = 0.001f;
+        // reflectRay.TMax = 100000.f;
 
-        // Trace reflection ray
-        PrimaryRayData reflectedRayData = {};
-        reflectedRayData.depth = hitData.depth + 1;
-        reflectedRayData.hitT = 0;
-        TraceRay(gScene.rtAccel, RAY_FLAG_NONE, 0xFF, 0, rayTypeCount, 0, reflectRay, reflectedRayData);
+        // // Trace reflection ray
+        // PrimaryRayData reflectedRayData = {};
+        // reflectedRayData.depth = hitData.depth + 1;
+        // reflectedRayData.hitT = 0;
+        // TraceRay(gScene.rtAccel, RAY_FLAG_NONE, 0xFF, 0, rayTypeCount, 0, reflectRay, reflectedRayData);
 
-        reflectedColor = reflectedRayData.color.rgb;
+        // reflectedColor = reflectedRayData.color.rgb;
     }
 
     // 5. Trace refraction ray if not TIR
@@ -461,13 +463,13 @@ void RaymarchingIntersection()
     {
         float3 p = rayOrigin + rayDir * t; // Position along the ray.
 
-        float d = map(p, time); // Current distance to the scene.
+        float d = map(p, waterTurbulence, time, iFrame); // Current distance to the scene.
 
         // Early stop if close enough or if too far.
         if (d < 0.001f)
         {
             attr.w_position = p;
-            attr.w_normal = sdCalculateNormal(p, time);
+            attr.w_normal = sdCalculateNormal(p, waterTurbulence, time, iFrame);
             attr.t = max(t, 0.001f);
 
             ReportHit(t, /*hitKind*/ 0, attr);
