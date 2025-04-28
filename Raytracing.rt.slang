@@ -35,6 +35,7 @@ import Rendering.Materials.TexLODHelpers;
 import Rendering.Lights.LightHelpers;
 
 RWTexture2D<float4> gOutput;
+RWTexture3D<float> gTexture3D;
 
 cbuffer PerFrameCB
 {

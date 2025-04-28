@@ -182,6 +182,27 @@ void Raytracing::onLoad(RenderContext* pRenderContext)
     uint32_t raymarching_AABB_ID = 1;
     scene_builder_.addCustomPrimitive(raymarching_AABB_ID, raymarching_AABB);
 
+    const int width = 4, height = 4, depth = 4;
+    std::vector<float> data(width * height * depth);
+
+    // Fill the texture with some values manually
+    for (int z = 0; z < depth; ++z)
+    {
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = 0; x < width; ++x)
+            {
+                int index = x + y * width + z * width * height;
+                data[index] = float(x + y + z) / 12.0f; // Example pattern
+            }
+        }
+    }
+
+    
+     mpTexture3D = getDevice()->createTexture3D(
+        width, height, depth, ResourceFormat::RGBA16Float, 1, data.data(), ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource
+    );
+
     //auto raymarching_node = SceneBuilder::Node();
     //raymarching_node.name = "RaymarchingNode";
     //auto raymarching_transform = Transform();
@@ -384,6 +405,7 @@ void Raytracing::onFrameRender(RenderContext* pRenderContext, const ref<Fbo>& pT
     var["PerFrameCB"]["iFrame"] = frame++;
 
     var["gOutput"] = mpRtOut;
+    var["gTexture3D"] = mpTexture3D;
     
 
     pRenderContext->clearUAV(mpRtOut->getUAV().get(), float4(kClearColor, 1));

@@ -72,6 +72,7 @@ private:
     bool mUseDOF = false;
     uint32_t mSampleIndex = 0;
     ref<Texture> mpRtOut;
+    ref<Texture> mpTexture3D;
 
     //void loadScene(const std::filesystem::path& path, const Fbo* pTargetFbo);
     //void setPerFrameVars(const Fbo* pTargetFbo);
