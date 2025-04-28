@@ -1,3 +1,6 @@
-build
-build_web
-.idea
+[bB]uild/
+cmake-*/
+.idea/
+.vs/
+out
+.vscode

@@ -74,6 +74,10 @@ private:
     ref<Texture> mpRtOut;
     ref<Texture> mpTexture3D;
 
+    std::vector<NodeID> sphereNodeIDs;
+
+    //ref<SceneBuilder> scene_builder_;
+
     //void loadScene(const std::filesystem::path& path, const Fbo* pTargetFbo);
     //void setPerFrameVars(const Fbo* pTargetFbo);
     ////void renderRaster(RenderContext* pRenderContext, const ref<Fbo>& pTargetFbo);

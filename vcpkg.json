@@ -1,0 +1,10 @@
+{
+    "name": "bark3d",
+    "version-string": "1.0",
+    "dependencies": [
+      "imgui",
+      "freeglut",
+      "glew",
+      "opengl"
+    ]
+  }
