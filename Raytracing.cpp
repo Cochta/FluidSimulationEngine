@@ -35,6 +35,11 @@
 #include "Utils/UI/TextRenderer.h"
 #include "Core/Program/Program.h"
 
+#ifdef TRACY_ENABLE
+#include <Tracy.hpp>
+#include <TracyC.h>
+#endif 
+
 FALCOR_EXPORT_D3D12_AGILITY_SDK
 
 SampleManager sample_manager;
@@ -281,7 +286,6 @@ void Raytracing::onLoad(RenderContext* pRenderContext)
             node.transform = transform.getMatrix();
             auto node_id = scene_builder->addNode(node);
 
-            std::cout << node.name << " " << i << std::endl;
             sphereNodeIDs.push_back(node_id);
 
             // Add Mesh Instances
@@ -486,6 +490,10 @@ void Raytracing::onFrameRender(RenderContext* pRenderContext, const ref<Fbo>& pT
     pRenderContext->blit(mpRtOut->getSRV(), pTargetFbo->getRenderTargetView(0));
 
     getTextRenderer().render(pRenderContext, getFrameRate().getMsg(), pTargetFbo, {20, 20});
+
+#ifdef TRACY_ENABLE
+    FrameMark;
+#endif
 }
 
 void Raytracing::onGuiRender(Gui* pGui)
@@ -537,6 +545,59 @@ void Raytracing::onGuiRender(Gui* pGui)
     //}
 
     mpScene->renderUI(w);
+
+    static bool adjustWindow = true;
+
+    if (adjustWindow)
+    {
+        ImGui::SetNextWindowSize(ImVec2(Metrics::Width / 2, static_cast<float>(Metrics::Height) / 2.5f));
+        adjustWindow = false;
+    }
+
+    ImGui::Begin("Sample Manager");
+
+    if (ImGui::BeginCombo("Select a Sample", sample_manager.GetSampleName(sample_manager.GetCurrentIndex()).c_str()))
+    {
+        for (std::size_t index = 0; index < sample_manager.GetSampleNbr(); index++)
+        {
+            if (ImGui::Selectable(sample_manager.GetSampleName(index).c_str(), sample_manager.GetCurrentIndex() == index))
+            {
+                sample_manager.ChangeSample(index);
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::Spacing();
+
+    ImGui::TextWrapped(sample_manager.GetSampleDescription(sample_manager.GetCurrentIndex()).c_str());
+
+    ImGui::Spacing();
+
+    sample_manager.DrawImgui(sample_manager.GetCurrentIndex());
+
+    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - (ImGui::GetFrameHeightWithSpacing()));
+
+    if (ImGui::ArrowButton("PreviousSample", ImGuiDir_Left))
+    {
+        sample_manager.PreviousSample();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Regenerate"))
+    {
+        sample_manager.RegenerateSample();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::ArrowButton("NextSample", ImGuiDir_Right))
+    {
+        sample_manager.NextSample();
+    }
+
+    ImGui::End();
 }
 
 bool Raytracing::onKeyEvent(const KeyboardEvent& keyEvent)

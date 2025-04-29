@@ -36,7 +36,7 @@ public:
 
 	[[nodiscard]] std::vector<GraphicsData>& GetSampleData() const noexcept;
 
-	void GiveMousePositionToSample(XMVECTOR mousePosition) const noexcept;
+        void GiveMousePositionToSample(XMVECTOR mousePosition) const noexcept;
 
 	void GiveLeftMouseClickToSample() const noexcept;
 

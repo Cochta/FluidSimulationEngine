@@ -11,25 +11,25 @@ std::string WaterBathSample::GetDescription() noexcept {
 
 void WaterBathSample::DrawImgui() noexcept
 {
-	//if (ImGui::SliderFloat("Gravity", &_world.Gravity, 0.0f, 500.0f)) {
-	//	_world.Gravity = _world.Gravity;
-	//}
-	//static int numParticles = NbParticles;
-	//if (ImGui::SliderInt("Number of Particles", &numParticles, 0, 10000)) {
-	//	NbParticles = numParticles;
-	//}
-	//if (ImGui::SliderFloat("Smoothing radius", &SPH::SmoothingRadius, 1.0f, 100.0f)) {
-	//	SPH::SmoothingRadius = SPH::SmoothingRadius;
-	//}
-	//if (ImGui::SliderFloat("Target density", &SPH::TargetDensity, 0.0f, 200.0f)) {
-	//	SPH::TargetDensity = SPH::TargetDensity;
-	//}
-	//if (ImGui::SliderFloat("Pressure multiplier", &SPH::PressureMultiplier, 0.0f, 100.0f)) {
-	//	SPH::PressureMultiplier = SPH::PressureMultiplier;
-	//}
-	//if (ImGui::SliderFloat("Viscosity strength", &SPH::ViscosityStrength, 0.0f, 10000.0f)) {
-	//	SPH::ViscosityStrength = SPH::ViscosityStrength;
-	//}
+	if (ImGui::SliderFloat("Gravity", &_world.Gravity, 0.0f, 500.0f)) {
+		_world.Gravity = _world.Gravity;
+	}
+	static int numParticles = NbParticles;
+	if (ImGui::SliderInt("Number of Particles", &numParticles, 0, 10000)) {
+		NbParticles = numParticles;
+	}
+	if (ImGui::SliderFloat("Smoothing radius", &SPH::SmoothingRadius, 1.0f, 100.0f)) {
+		SPH::SmoothingRadius = SPH::SmoothingRadius;
+	}
+	if (ImGui::SliderFloat("Target density", &SPH::TargetDensity, 0.0f, 200.0f)) {
+		SPH::TargetDensity = SPH::TargetDensity;
+	}
+	if (ImGui::SliderFloat("Pressure multiplier", &SPH::PressureMultiplier, 0.0f, 100.0f)) {
+		SPH::PressureMultiplier = SPH::PressureMultiplier;
+	}
+	if (ImGui::SliderFloat("Viscosity strength", &SPH::ViscosityStrength, 0.0f, 10000.0f)) {
+		SPH::ViscosityStrength = SPH::ViscosityStrength;
+	}
 }
 
 void WaterBathSample::OnCollisionEnter(ColliderRef col1,

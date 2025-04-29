@@ -48,7 +48,6 @@ void SampleManager::RegenerateSample() const noexcept
 {
 	_samples[_sampleIdx]->TearDown();
 	_samples[_sampleIdx]->SetUp();
-	printf("\n");
 }
 
 std::vector<GraphicsData>& SampleManager::GetSampleData() const noexcept
